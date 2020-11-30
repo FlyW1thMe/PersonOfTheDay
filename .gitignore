@@ -1,0 +1,9 @@
+*.pyc
+*.log
+*.db
+.DS_Store
+settings.py
+temp.py
+**/__pycache__/
+**/.idea/
+**/venv/
