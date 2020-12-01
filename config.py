@@ -1,4 +1,17 @@
+import logging
 import settings
+import sqlite3
+import time
+from random import choice
+from datetime import datetime
+from sqlite3 import DatabaseError
+from telegram.bot import Bot
+from telegram.ext import messagequeue as mq
+from telegram.utils.request import Request
+from telegram.ext import Updater, CommandHandler
+from config import bot_say, chat_name, START, PHRASES
+
+
 
 def chat_name(update, context):
     default_name_query = "SELECT title from chat_name where id = 1;"
@@ -24,7 +37,7 @@ def b_day(update, context):
 
 
 START = ["Опять началось..", "Нууус, посмотрим-с", "Вуб-вуб, рандомирую и вычисляю",
-         "Одному заняться нехуй, а все страдают", "Доброго денечка, уважаемые. Ну что, начнем?"
+         "Одному заняться нечем, а все страдают", "Доброго денечка, уважаемые. Ну что, начнем?"
 ]
 
 
@@ -36,4 +49,8 @@ PHRASES = ["Обезьянам банан, а ты еблан", "Прошел д
            "а кто это у нас такой маленький, а уже 'Еблан по знакомству?'",
            "У-у-у-у, сука! Ты победил, сейчас где-то плачет один 'ведущий ассессментов'",
            "Астрологи обьявили день 'Еблана по знакомству, поздравляю тебя'"
+
 ]
+
+
+

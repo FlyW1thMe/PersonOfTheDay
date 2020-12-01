@@ -62,7 +62,8 @@ def add_user(update, context):
     try:
         cursor.execute(add_query)
         conn.commit()
-        print(sql_query)
+        update.message.reply_text(f'Юзер {new_user} добавлен в базу')
+        print(add_query)
     except DatabaseError:
         update.message.reply_text('Error add user')
 
@@ -72,21 +73,41 @@ def del_user(update, context):
     del_user = text_from_tg.removeprefix('/del ')
     chat_id = str(update.effective_chat.id)
     sql_chat_id = chat_id.removeprefix('-')
+    del_query = f"DELETE FROM chat_{sql_chat_id} WHERE user = '{del_user}'"
+    try:
+        cursor.execute(del_query)
+        conn.commit()
+        update.message.reply_text(f'Юзер {del_user} удален из базы')
+        print(del_query)
+    except DatabaseError:
+        update.message.reply_text('Error del user')
 
 
 
 # Берет пользователя из базы и рандомит
-def random_from_base():
-    query_user = "SELECT user from users order by random() limit 1;"
+def random_from_base(update, context):
+    chat_id = str(update.effective_chat.id)
+    sql_chat_id = chat_id.removeprefix('-')
+    query_user = f"SELECT user from chat_{sql_chat_id} order by random() limit 1;"
     cursor.execute(query_user)
     users_frm_db = cursor.fetchall()
     subj = str(users_frm_db)
     rand_user = (''.join([c for c in subj if c not in settings.chars_to_remove]))
     return rand_user
 
+
+def random_phrases(subject):
+    in_db_num = int(subject)
+    query_user = f"SELECT phrases from chat_phrases where count_num = {in_db_num} and chat_id = 0 order by random() limit 1;"
+    cursor.execute(query_user)
+    query = cursor.fetchall()
+    subj = str(query)
+    fetch_query = (''.join([c for c in subj if c not in settings.chars_to_remove]))
+    return fetch_query
+
 # Проверка даты последнего ролла
 def check_date():
-    query_date = "SELECT last_date FROM users WHERE last_date = strftime('%d-%m-%Y', 'now') limit 1"
+    query_date = f"SELECT last_date FROM users WHERE last_date = strftime('%d-%m-%Y', 'now') limit 1"
     cursor.execute(query_date)
     date_on_db = cursor.fetchall()
     subj_date = str(date_on_db)
@@ -94,21 +115,20 @@ def check_date():
     return(rand_date)
 
 
+
 # Берет пользователя из функции выше и проверяет его на еблана дня
 def roll(update,context):
-    print('/roll')
     date = check_date()
     today = datetime.utcnow().strftime("%d-%m-%Y")
     if date == today:
         update.message.reply_text('Тебя учили читать, пёс? В чате СЕГОДНЯ уже проверяли.')
         time.sleep(2)
         update.message.reply_text('Перед тем как кликнуть - читай чат.')
+        print('/roll')
     else:
-        text = choice(START)
-        update.message.reply_text(text)
+        update.message.reply_text(random_phrases(1))
         time.sleep(2)
-        phrase = choice(PHRASES)
-        update.message.reply_text(phrase)
+        update.message.reply_text(random_phrases(2))
         time.sleep(2)
         same = random_from_base()
         usr = f"'{str(same)}'"
@@ -118,11 +138,11 @@ def roll(update,context):
         update_query = "update users set count = count + 1, last_date = strftime('%d-%m-%Y','now') where user = " + usr
         cursor.execute(update_query)
         conn.commit()
+        print('/roll')
 
 
 # Прямой sql запрос в базу
 def sql_query(update, context):
-    print('/sql')
     user_id = update.effective_user.id
     text_from_tg = update.message.text
     new_text = text_from_tg.removeprefix('/sql ')
@@ -130,18 +150,19 @@ def sql_query(update, context):
         if user_id == settings.ADMIN:
             cursor.execute(new_text)
             update.message.reply_text(cursor.fetchall())
+            print('/sql')
         else:
             update.message.reply_text(f'Пошел нахуй со своим "{new_text}", самый умный тут?')
+            print('/sql')
     except DatabaseError:
         update.message.reply_text('Exception')
 
 # Выводит топ юзеров
 def top(update, context):
-    print('/top')
     query_top = "SELECT user, count FROM users ORDER BY count DESC"
     cursor.execute(query_top)
     top_from_db = cursor.fetchall()
-
+    print('/top')
     hey = 0
     total_string = ''
     for i in top_from_db:
@@ -170,7 +191,7 @@ def main():
     mybot = Updater(bot=bot, use_context=True)
 
     dp = mybot.dispatcher
-    dp.add_handler(CommandHandler('go', greet_user))
+    dp.add_handler(CommandHandler('start', greet_user))
     dp.add_handler(CommandHandler('roll', roll))
     dp.add_handler(CommandHandler('sql', sql_query))
     dp.add_handler(CommandHandler('top', top))
@@ -178,6 +199,7 @@ def main():
     dp.add_handler(CommandHandler('bot', bot_say))
     dp.add_handler(CommandHandler('new', new))
     dp.add_handler(CommandHandler('add', add_user))
+    dp.add_handler(CommandHandler('del', del_user))
 
 
     logging.info('Бот Запустился' + datetime.utcnow().strftime("%d-%m-%Y %H:%M:%S"))
