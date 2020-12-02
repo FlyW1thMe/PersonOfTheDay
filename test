@@ -1,0 +1,22 @@
+import settings
+import sqlite3
+from main import *
+
+
+
+
+def random_phrases(subject,update):
+    chat_id = str(update.effective_chat.id)
+    sql_chat_id = chat_id.removeprefix('-')
+    in_db_num = int(subject)
+    query_user = f"SELECT phrases from chat_phrases where count_num = {in_db_num} and chat_id = {sql_chat_id} order by random() limit 1;"
+    cursor.execute(query_user)
+    query = cursor.fetchall()
+    subj = str(query)
+    fetch_query = (''.join([c for c in subj if c not in settings.chars_to_remove]))
+    print(fetch_query)
+
+random_phrases(1, update);
+
+
+

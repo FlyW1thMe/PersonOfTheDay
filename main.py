@@ -58,7 +58,7 @@ def add_user(update, context):
     new_user = text_from_tg.removeprefix('/add ')
     chat_id = str(update.effective_chat.id)
     sql_chat_id = chat_id.removeprefix('-')
-    add_query = f"INSERT INTO chat_{sql_chat_id} (user, count, last_date, chat_id) VALUES ('{new_user}', null, null, {sql_chat_id})"
+    add_query = f"INSERT INTO chat_{sql_chat_id} (user, count, last_date, chat_id) VALUES ('{new_user}', 0, 01-01-1970, {sql_chat_id})"
     try:
         cursor.execute(add_query)
         conn.commit()
@@ -96,9 +96,11 @@ def random_from_base(update, context):
     return rand_user
 
 
-def random_phrases(subject):
+def random_phrases(subject, update):
+    chat_id = str(update.effective_chat.id)
+    sql_chat_id = chat_id.removeprefix('-')
     in_db_num = int(subject)
-    query_user = f"SELECT phrases from chat_phrases where count_num = {in_db_num} and chat_id = 0 order by random() limit 1;"
+    query_user = f"SELECT phrases from chat_phrases where count_num = {in_db_num} and chat_id = {sql_chat_id} order by random() limit 1;"
     cursor.execute(query_user)
     query = cursor.fetchall()
     subj = str(query)
@@ -106,10 +108,17 @@ def random_phrases(subject):
     return fetch_query
 
 # Проверка даты последнего ролла
-def check_date():
-    query_date = f"SELECT last_date FROM users WHERE last_date = strftime('%d-%m-%Y', 'now') limit 1"
-    cursor.execute(query_date)
-    date_on_db = cursor.fetchall()
+def check_date(update, context):
+    chat_id = str(update.effective_chat.id)
+    sql_chat_id = chat_id.removeprefix('-')
+    try:
+        query_date = f"SELECT last_date FROM chat_{sql_chat_id} WHERE last_date = strftime('%d-%m-%Y', 'now') limit 1"
+        cursor.execute(query_date)
+        date_on_db = cursor.fetchall()
+        print('/check_date')
+    except DatabaseError:
+        update.message.reply_text('cannot rand date')
+
     subj_date = str(date_on_db)
     rand_date = (''.join([c for c in subj_date if c not in settings.chars_to_remove]))
     return(rand_date)
@@ -118,7 +127,9 @@ def check_date():
 
 # Берет пользователя из функции выше и проверяет его на еблана дня
 def roll(update,context):
-    date = check_date()
+    chat_id = str(update.effective_chat.id)
+    sql_chat_id = chat_id.removeprefix('-')
+    date = check_date(update, context)
     today = datetime.utcnow().strftime("%d-%m-%Y")
     if date == today:
         update.message.reply_text('Тебя учили читать, пёс? В чате СЕГОДНЯ уже проверяли.')
@@ -126,16 +137,15 @@ def roll(update,context):
         update.message.reply_text('Перед тем как кликнуть - читай чат.')
         print('/roll')
     else:
-        update.message.reply_text(random_phrases(1))
+        update.message.reply_text(random_phrases(1,update))
         time.sleep(2)
-        update.message.reply_text(random_phrases(2))
+        update.message.reply_text(random_phrases(2, update))
         time.sleep(2)
-        same = random_from_base()
-        usr = f"'{str(same)}'"
+        same = random_from_base(update, context)
         update.message.reply_text(f'Поздравляю тебя {same}')
         time.sleep(2)
         update.message.reply_text('Впрочем, никто и не удивлен.')
-        update_query = "update users set count = count + 1, last_date = strftime('%d-%m-%Y','now') where user = " + usr
+        update_query = f"update chat_{sql_chat_id} set count = count + 1, last_date = strftime('%d-%m-%Y','now') where user = '{same}'"
         cursor.execute(update_query)
         conn.commit()
         print('/roll')
@@ -159,7 +169,9 @@ def sql_query(update, context):
 
 # Выводит топ юзеров
 def top(update, context):
-    query_top = "SELECT user, count FROM users ORDER BY count DESC"
+    chat_id = str(update.effective_chat.id)
+    sql_chat_id = chat_id.removeprefix('-')
+    query_top = f"SELECT user, count FROM chat_{sql_chat_id} ORDER BY count DESC"
     cursor.execute(query_top)
     top_from_db = cursor.fetchall()
     print('/top')

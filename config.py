@@ -1,15 +1,5 @@
-import logging
 import settings
-import sqlite3
-import time
-from random import choice
-from datetime import datetime
-from sqlite3 import DatabaseError
-from telegram.bot import Bot
-from telegram.ext import messagequeue as mq
-from telegram.utils.request import Request
-from telegram.ext import Updater, CommandHandler
-from config import bot_say, chat_name, START, PHRASES
+
 
 
 
