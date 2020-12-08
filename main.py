@@ -9,7 +9,7 @@ from telegram.bot import Bot
 from telegram.ext import messagequeue as mq
 from telegram.utils.request import Request
 from telegram.ext import Updater, CommandHandler
-from config import bot_say, chat_name, START, PHRASES
+from config import bot_say, chat_name
 
 
 logging.basicConfig(filename='bot.log', level=logging.INFO)
@@ -45,20 +45,28 @@ def greet_user(update, context):
     update.message.reply_text(text)
     chat_id = str(update.effective_chat.id)
     sql_chat_id = chat_id.removeprefix('-')
-    sql_query = f'create table if not exists chat_{sql_chat_id} (user text, count int, last_date text, chat_id int)'
+    sql_query = f'create table if not exists chat (user text, count int, last_date text, chat_id int)'
+    sql_name = f"INSERT INTO chat_name(chat_id,chat_tag) " \
+               f"SELECT {sql_chat_id}, 'Котик' " \
+               f"WHERE NOT EXISTS(SELECT 1 FROM chat_name WHERE chat_id = {sql_chat_id} AND chat_tag = 'Котик');"
     try:
         cursor.execute(sql_query)
         conn.commit()
-        print(sql_query)
     except DatabaseError:
         update.message.reply_text('Exception creating table')
+    try:
+        cursor.execute(sql_name)
+        conn.commit()
+    except DatabaseError:
+        update.message.reply_text('Exception creating insert_chat_name')
+    print('/start')
 
 def add_user(update, context):
     text_from_tg = update.message.text
     new_user = text_from_tg.removeprefix('/add ')
     chat_id = str(update.effective_chat.id)
     sql_chat_id = chat_id.removeprefix('-')
-    add_query = f"INSERT INTO chat_{sql_chat_id} (user, count, last_date, chat_id) VALUES ('{new_user}', 0, 01-01-1970, {sql_chat_id})"
+    add_query = f"INSERT INTO chat (user, count, last_date, chat_id) VALUES ('{new_user}', 0, '01-01-1970', {sql_chat_id})"
     try:
         cursor.execute(add_query)
         conn.commit()
@@ -73,7 +81,7 @@ def del_user(update, context):
     del_user = text_from_tg.removeprefix('/del ')
     chat_id = str(update.effective_chat.id)
     sql_chat_id = chat_id.removeprefix('-')
-    del_query = f"DELETE FROM chat_{sql_chat_id} WHERE user = '{del_user}'"
+    del_query = f"DELETE FROM chat WHERE user = '{del_user}' and chat_id = {sql_chat_id}"
     try:
         cursor.execute(del_query)
         conn.commit()
@@ -88,7 +96,7 @@ def del_user(update, context):
 def random_from_base(update, context):
     chat_id = str(update.effective_chat.id)
     sql_chat_id = chat_id.removeprefix('-')
-    query_user = f"SELECT user from chat_{sql_chat_id} order by random() limit 1;"
+    query_user = f"SELECT user from chat where chat_id = {sql_chat_id} order by random() limit 1;"
     cursor.execute(query_user)
     users_frm_db = cursor.fetchall()
     subj = str(users_frm_db)
@@ -112,7 +120,7 @@ def check_date(update, context):
     chat_id = str(update.effective_chat.id)
     sql_chat_id = chat_id.removeprefix('-')
     try:
-        query_date = f"SELECT last_date FROM chat_{sql_chat_id} WHERE last_date = strftime('%d-%m-%Y', 'now') limit 1"
+        query_date = f"SELECT last_date FROM chat WHERE last_date = strftime('%d-%m-%Y', 'now') and chat_id = {sql_chat_id} limit 1"
         cursor.execute(query_date)
         date_on_db = cursor.fetchall()
         print('/check_date')
@@ -130,22 +138,32 @@ def roll(update,context):
     chat_id = str(update.effective_chat.id)
     sql_chat_id = chat_id.removeprefix('-')
     date = check_date(update, context)
+    try:
+        query_date = f"SELECT chat_tag FROM chat_name WHERE chat_id = {sql_chat_id}"
+        cursor.execute(query_date)
+        winner_exec = cursor.fetchall()
+        print(winner_exec)
+        winner = (''.join([c for c in str(winner_exec) if c not in settings.chars_to_remove]))
+        print('/check_date')
+    except DatabaseError:
+        update.message.reply_text('Что-то пошло не так, обратитесь создателю бота')
+
     today = datetime.utcnow().strftime("%d-%m-%Y")
     if date == today:
-        update.message.reply_text('Тебя учили читать, пёс? В чате СЕГОДНЯ уже проверяли.')
+        update.message.reply_text('В чате СЕГОДНЯ уже проверяли.')
         time.sleep(2)
         update.message.reply_text('Перед тем как кликнуть - читай чат.')
         print('/roll')
     else:
         update.message.reply_text(random_phrases(1,update))
         time.sleep(2)
-        update.message.reply_text(random_phrases(2, update))
+        update.message.reply_text(random_phrases(2,update))
         time.sleep(2)
         same = random_from_base(update, context)
-        update.message.reply_text(f'Поздравляю тебя {same}')
+        update.message.reply_text(f'Поздравляю тебя {same}, ты {winner} дня')
         time.sleep(2)
-        update.message.reply_text('Впрочем, никто и не удивлен.')
-        update_query = f"update chat_{sql_chat_id} set count = count + 1, last_date = strftime('%d-%m-%Y','now') where user = '{same}'"
+        update.message.reply_text('Впрочем, разве это было не очевидно?')
+        update_query = f"update chat set count = count + 1, last_date = strftime('%d-%m-%Y','now') where user = '{same}' and chat_id = {sql_chat_id}"
         cursor.execute(update_query)
         conn.commit()
         print('/roll')
@@ -162,7 +180,7 @@ def sql_query(update, context):
             update.message.reply_text(cursor.fetchall())
             print('/sql')
         else:
-            update.message.reply_text(f'Пошел нахуй со своим "{new_text}", самый умный тут?')
+            update.message.reply_text(f'Ты серьезно думал что кто угодно сможет это сделать?')
             print('/sql')
     except DatabaseError:
         update.message.reply_text('Exception')
@@ -171,7 +189,7 @@ def sql_query(update, context):
 def top(update, context):
     chat_id = str(update.effective_chat.id)
     sql_chat_id = chat_id.removeprefix('-')
-    query_top = f"SELECT user, count FROM chat_{sql_chat_id} ORDER BY count DESC"
+    query_top = f"SELECT user, count FROM chat where chat_id = {sql_chat_id} ORDER BY count DESC"
     cursor.execute(query_top)
     top_from_db = cursor.fetchall()
     print('/top')
@@ -182,8 +200,32 @@ def top(update, context):
         num_of_wins = i[1]
         hey += 1
         total_string += ''.join(f'{hey}. {fio} - {num_of_wins} раз(а)\n')
-    top_message = 'Итак, кто сколько раз "побеждал": \n' + total_string
+    top_message = f'Итак, кто сколько раз "побеждал": \n {total_string}'
     update.message.reply_text(top_message)
+
+
+def self_registration(update,context):
+    chat_id = str(update.effective_chat.id)
+    sql_chat_id = chat_id.removeprefix('-')
+    username = update.effective_user.username
+    try:
+        update_query = f"INSERT INTO chat (user, count, last_date, chat_id) VALUES ('{username}', 0, '01-01-1970', {sql_chat_id})"
+        cursor.execute(update_query)
+        conn.commit()
+    except DatabaseError:
+        update.message.reply_text('проблема с саморегистрацией')
+
+def self_unregistration(update,context):
+    chat_id = str(update.effective_chat.id)
+    sql_chat_id = chat_id.removeprefix('-')
+    username = update.effective_user.username
+    try:
+        update_query = f"DELETE FROM chat WHERE user = {username} AND chat_id = {sql_chat_id}"
+        cursor.execute(update_query)
+        conn.commit()
+    except DatabaseError:
+        update.message.reply_text('проблема с автоудалением, возможно вы зпрегистрированны через /add, тогда удаляйте через /del')
+
 
 def new(update, context):
     firstname = update.effective_user.first_name
@@ -212,6 +254,8 @@ def main():
     dp.add_handler(CommandHandler('new', new))
     dp.add_handler(CommandHandler('add', add_user))
     dp.add_handler(CommandHandler('del', del_user))
+    dp.add_handler(CommandHandler('reg', self_registration))
+    dp.add_handler(CommandHandler('unreg', self_unregistration))
 
 
     logging.info('Бот Запустился' + datetime.utcnow().strftime("%d-%m-%Y %H:%M:%S"))
