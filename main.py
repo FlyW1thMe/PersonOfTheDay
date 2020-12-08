@@ -2,14 +2,13 @@ import logging
 import settings
 import sqlite3
 import time
-from random import choice
 from datetime import datetime
 from sqlite3 import DatabaseError
 from telegram.bot import Bot
 from telegram.ext import messagequeue as mq
 from telegram.utils.request import Request
 from telegram.ext import Updater, CommandHandler
-from config import bot_say, chat_name
+from config import bot_say
 
 
 logging.basicConfig(filename='bot.log', level=logging.INFO)
@@ -21,6 +20,7 @@ print('bot has been started at ' + datetime.utcnow().strftime("%d-%m-%Y %H:%M:%S
 
 conn = sqlite3.connect("mydatabase.db", check_same_thread = False)
 cursor = conn.cursor()
+
 
 
 class MQBot(Bot):
@@ -41,8 +41,17 @@ class MQBot(Bot):
 
 
 def greet_user(update, context):
-    text = 'Начинаем'
-    update.message.reply_text(text)
+    update.message.reply_text("""
+        /start  - Обязательная команда для работы с ботом
+/set -  Установить название для персоны дня(по умолчанию "Котик")
+/add - добавить участника вручную
+/del - удалить участника вручную
+/reg - саморегистрация по юзернейму
+/unreg - самоудаление если пользователь саморегистрировался по /reg
+/roll - Запустить рандомизатор для выбора персоны дня
+/top - Вывести топ участников по количеству побед
+/faq - информация по командам чата
+        """)
     chat_id = str(update.effective_chat.id)
     sql_chat_id = chat_id.removeprefix('-')
     sql_query = f'create table if not exists chat (user text, count int, last_date text, chat_id int)'
@@ -61,6 +70,21 @@ def greet_user(update, context):
         update.message.reply_text('Exception creating insert_chat_name')
     print('/start')
 
+
+def faq(update, context):
+    update.message.reply_text("""
+    /start  - Обязательная команда для работы с ботом
+/set -  Установить название для персоны дня(по умолчанию "Котик")
+/add - добавить участника вручную
+/del - удалить участника вручную
+/reg - саморегистрация по юзернейму
+/unreg - автоудаление если юзер регистрировался по "/reg"
+/roll - Запустить рандомизатор для выбора персоны дня
+/top - Вывести топ участников по количеству побед
+/faq - информация по командам чата
+    """)
+
+
 def add_user(update, context):
     text_from_tg = update.message.text
     new_user = text_from_tg.removeprefix('/add ')
@@ -71,9 +95,23 @@ def add_user(update, context):
         cursor.execute(add_query)
         conn.commit()
         update.message.reply_text(f'Юзер {new_user} добавлен в базу')
-        print(add_query)
+        print('/add')
     except DatabaseError:
         update.message.reply_text('Error add user')
+
+
+def chat_name(update, context):
+    chat_id = str(update.effective_chat.id)
+    sql_chat_id = chat_id.removeprefix('-')
+    text_from_tg = update.message.text
+    new_text = text_from_tg.removeprefix('/set ')
+    sql_query = f"UPDATE chat_name SET chat_tag = '{new_text}' WHERE chat_id = {sql_chat_id};"
+    cursor.execute(sql_query)
+    default_name_output = cursor.fetchall()
+    conn.commit()
+    subj = str(default_name_output)
+    new_name = (''.join([c for c in subj if c not in settings.chars_to_remove]))
+    update.message.reply_text(f'Персона дня переименованна в "{new_text}".')
 
 
 def del_user(update, context):
@@ -86,7 +124,7 @@ def del_user(update, context):
         cursor.execute(del_query)
         conn.commit()
         update.message.reply_text(f'Юзер {del_user} удален из базы')
-        print(del_query)
+        print('/del')
     except DatabaseError:
         update.message.reply_text('Error del user')
 
@@ -99,6 +137,7 @@ def random_from_base(update, context):
     query_user = f"SELECT user from chat where chat_id = {sql_chat_id} order by random() limit 1;"
     cursor.execute(query_user)
     users_frm_db = cursor.fetchall()
+    conn.commit()
     subj = str(users_frm_db)
     rand_user = (''.join([c for c in subj if c not in settings.chars_to_remove]))
     return rand_user
@@ -108,11 +147,13 @@ def random_phrases(subject, update):
     chat_id = str(update.effective_chat.id)
     sql_chat_id = chat_id.removeprefix('-')
     in_db_num = int(subject)
-    query_user = f"SELECT phrases from chat_phrases where count_num = {in_db_num} and chat_id = {sql_chat_id} order by random() limit 1;"
+    query_user = f"SELECT phrases from chat_phrases " \
+                 f"where count_num = {in_db_num} and chat_id = {sql_chat_id} order by random() limit 1;"
     cursor.execute(query_user)
-    query = cursor.fetchall()
-    subj = str(query)
-    fetch_query = (''.join([c for c in subj if c not in settings.chars_to_remove]))
+    query = str(cursor.fetchall())
+    conn.commit()
+    new = str(query[3 : -4])
+    fetch_query = new
     return fetch_query
 
 # Проверка даты последнего ролла
@@ -120,7 +161,8 @@ def check_date(update, context):
     chat_id = str(update.effective_chat.id)
     sql_chat_id = chat_id.removeprefix('-')
     try:
-        query_date = f"SELECT last_date FROM chat WHERE last_date = strftime('%d-%m-%Y', 'now') and chat_id = {sql_chat_id} limit 1"
+        query_date = f"SELECT last_date FROM chat " \
+                     f"WHERE last_date = strftime('%d-%m-%Y', 'now') and chat_id = {sql_chat_id} limit 1"
         cursor.execute(query_date)
         date_on_db = cursor.fetchall()
         print('/check_date')
@@ -163,7 +205,8 @@ def roll(update,context):
         update.message.reply_text(f'Поздравляю тебя {same}, ты {winner} дня')
         time.sleep(2)
         update.message.reply_text('Впрочем, разве это было не очевидно?')
-        update_query = f"update chat set count = count + 1, last_date = strftime('%d-%m-%Y','now') where user = '{same}' and chat_id = {sql_chat_id}"
+        update_query = f"update chat set count = count + 1, last_date = strftime('%d-%m-%Y','now') " \
+                       f"where user = '{same}' and chat_id = {sql_chat_id}"
         cursor.execute(update_query)
         conn.commit()
         print('/roll')
@@ -209,9 +252,12 @@ def self_registration(update,context):
     sql_chat_id = chat_id.removeprefix('-')
     username = update.effective_user.username
     try:
-        update_query = f"INSERT INTO chat (user, count, last_date, chat_id) VALUES ('{username}', 0, '01-01-1970', {sql_chat_id})"
+        update_query = f"INSERT INTO chat (user, count, last_date, chat_id) " \
+                       f"SELECT '{username}', 0, '01-01-1970', {sql_chat_id} " \
+                       f"WHERE NOT EXISTS(SELECT 1 FROM chat WHERE user = '{username}' AND chat_id = {sql_chat_id});"
         cursor.execute(update_query)
         conn.commit()
+        update.message.reply_text('Вы добавили свой юзернейм в базу')
     except DatabaseError:
         update.message.reply_text('проблема с саморегистрацией')
 
@@ -220,11 +266,13 @@ def self_unregistration(update,context):
     sql_chat_id = chat_id.removeprefix('-')
     username = update.effective_user.username
     try:
-        update_query = f"DELETE FROM chat WHERE user = {username} AND chat_id = {sql_chat_id}"
+        update_query = f"DELETE FROM chat WHERE user = '{username}' AND chat_id = {sql_chat_id}"
         cursor.execute(update_query)
         conn.commit()
+        update.message.reply_text('Вы удалили свой юзернейм из базы')
     except DatabaseError:
-        update.message.reply_text('проблема с автоудалением, возможно вы зпрегистрированны через /add, тогда удаляйте через /del')
+        update.message.reply_text('проблема с автоудалением, возможно вы зпрегистрированны '
+                                  'через /add, тогда удаляйте через /del')
 
 
 def new(update, context):
@@ -249,13 +297,14 @@ def main():
     dp.add_handler(CommandHandler('roll', roll))
     dp.add_handler(CommandHandler('sql', sql_query))
     dp.add_handler(CommandHandler('top', top))
-    dp.add_handler(CommandHandler('chat_name', chat_name))
+    dp.add_handler(CommandHandler('set', chat_name))
     dp.add_handler(CommandHandler('bot', bot_say))
     dp.add_handler(CommandHandler('new', new))
     dp.add_handler(CommandHandler('add', add_user))
     dp.add_handler(CommandHandler('del', del_user))
     dp.add_handler(CommandHandler('reg', self_registration))
     dp.add_handler(CommandHandler('unreg', self_unregistration))
+    dp.add_handler(CommandHandler('faq', faq))
 
 
     logging.info('Бот Запустился' + datetime.utcnow().strftime("%d-%m-%Y %H:%M:%S"))
