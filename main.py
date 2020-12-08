@@ -41,7 +41,7 @@ class MQBot(Bot):
 
 
 def greet_user(update, context):
-    update.message.reply_text("""
+    context.bot.send_message(chat_id=update.effective_chat.id, text="""
         /start  - Обязательная команда для работы с ботом
 /set -  Установить название для персоны дня(по умолчанию "Котик")
 /add - добавить участника вручную
@@ -62,17 +62,18 @@ def greet_user(update, context):
         cursor.execute(sql_query)
         conn.commit()
     except DatabaseError:
-        update.message.reply_text('Exception creating table')
+        context.bot.send_message(chat_id=update.effective_chat.id, text='Exception creating table')
     try:
         cursor.execute(sql_name)
         conn.commit()
     except DatabaseError:
-        update.message.reply_text('Exception creating insert_chat_name')
+        context.bot.send_message(chat_id=update.effective_chat.id, text='Вы уже нажимали /start, для информации нажмите '
+                                                                        '/help')
     print('/start')
 
 
 def faq(update, context):
-    update.message.reply_text("""
+    context.bot.send_message(chat_id=update.effective_chat.id, text="""
     /start  - Обязательная команда для работы с ботом
 /set -  Установить название для персоны дня(по умолчанию "Котик")
 /add - добавить участника вручную
@@ -94,10 +95,10 @@ def add_user(update, context):
     try:
         cursor.execute(add_query)
         conn.commit()
-        update.message.reply_text(f'Юзер {new_user} добавлен в базу')
+        context.bot.send_message(chat_id=update.effective_chat.id, text=f'Юзер {new_user} добавлен в базу')
         print('/add')
     except DatabaseError:
-        update.message.reply_text('Error add user')
+        context.bot.send_message(chat_id=update.effective_chat.id, text='Error add user')
 
 
 def chat_name(update, context):
@@ -111,7 +112,7 @@ def chat_name(update, context):
     conn.commit()
     subj = str(default_name_output)
     new_name = (''.join([c for c in subj if c not in settings.chars_to_remove]))
-    update.message.reply_text(f'Персона дня переименованна в "{new_text}".')
+    context.bot.send_message(chat_id=update.effective_chat.id, text=f'Персона дня переименованна в "{new_text}".')
 
 
 def del_user(update, context):
@@ -123,10 +124,10 @@ def del_user(update, context):
     try:
         cursor.execute(del_query)
         conn.commit()
-        update.message.reply_text(f'Юзер {del_user} удален из базы')
+        context.bot.send_message(chat_id=update.effective_chat.id, text=f'Юзер {del_user} удален из базы')
         print('/del')
     except DatabaseError:
-        update.message.reply_text('Error del user')
+        context.bot.send_message(chat_id=update.effective_chat.id, text='Error del user')
 
 
 
@@ -167,7 +168,7 @@ def check_date(update, context):
         date_on_db = cursor.fetchall()
         print('/check_date')
     except DatabaseError:
-        update.message.reply_text('cannot rand date')
+        context.bot.send_message(chat_id=update.effective_chat.id, text='cannot randomize date')
 
     subj_date = str(date_on_db)
     rand_date = (''.join([c for c in subj_date if c not in settings.chars_to_remove]))
@@ -188,23 +189,23 @@ def roll(update,context):
         winner = (''.join([c for c in str(winner_exec) if c not in settings.chars_to_remove]))
         print('/check_date')
     except DatabaseError:
-        update.message.reply_text('Что-то пошло не так, обратитесь создателю бота')
+        context.bot.send_message(chat_id=update.effective_chat.id, text='Что-то пошло не так, обратитесь создателю бота')
 
     today = datetime.utcnow().strftime("%d-%m-%Y")
     if date == today:
-        update.message.reply_text('В чате СЕГОДНЯ уже проверяли.')
+        context.bot.send_message(chat_id=update.effective_chat.id, text='В чате СЕГОДНЯ уже проверяли.')
         time.sleep(2)
-        update.message.reply_text('Перед тем как кликнуть - читай чат.')
+        context.bot.send_message(chat_id=update.effective_chat.id, text='Перед тем как кликнуть - читай чат.')
         print('/roll')
     else:
-        update.message.reply_text(random_phrases(1,update))
+        context.bot.send_message(chat_id=update.effective_chat.id, text=random_phrases(1,update))
         time.sleep(2)
-        update.message.reply_text(random_phrases(2,update))
+        context.bot.send_message(chat_id=update.effective_chat.id, text=random_phrases(2,update))
         time.sleep(2)
         same = random_from_base(update, context)
-        update.message.reply_text(f'Поздравляю тебя {same}, ты {winner} дня')
+        context.bot.send_message(chat_id=update.effective_chat.id, text=f'Поздравляю тебя {same}, ты {winner} дня')
         time.sleep(2)
-        update.message.reply_text('Впрочем, разве это было не очевидно?')
+        context.bot.send_message(chat_id=update.effective_chat.id, text='Впрочем, разве это было не очевидно?')
         update_query = f"update chat set count = count + 1, last_date = strftime('%d-%m-%Y','now') " \
                        f"where user = '{same}' and chat_id = {sql_chat_id}"
         cursor.execute(update_query)
@@ -220,13 +221,13 @@ def sql_query(update, context):
     try:
         if user_id == settings.ADMIN:
             cursor.execute(new_text)
-            update.message.reply_text(cursor.fetchall())
+            context.bot.send_message(chat_id=update.effective_chat.id, text=cursor.fetchall())
             print('/sql')
         else:
-            update.message.reply_text(f'Ты серьезно думал что кто угодно сможет это сделать?')
+            context.bot.send_message(chat_id=update.effective_chat.id, text=f'Ты серьезно думал что кто угодно сможет это сделать?')
             print('/sql')
     except DatabaseError:
-        update.message.reply_text('Exception')
+        context.bot.send_message(chat_id=update.effective_chat.id, text='Exception')
 
 # Выводит топ юзеров
 def top(update, context):
@@ -244,7 +245,7 @@ def top(update, context):
         hey += 1
         total_string += ''.join(f'{hey}. {fio} - {num_of_wins} раз(а)\n')
     top_message = f'Итак, кто сколько раз "побеждал": \n {total_string}'
-    update.message.reply_text(top_message)
+    context.bot.send_message(chat_id=update.effective_chat.id, text=top_message)
 
 
 def self_registration(update,context):
@@ -257,9 +258,9 @@ def self_registration(update,context):
                        f"WHERE NOT EXISTS(SELECT 1 FROM chat WHERE user = '{username}' AND chat_id = {sql_chat_id});"
         cursor.execute(update_query)
         conn.commit()
-        update.message.reply_text('Вы добавили свой юзернейм в базу')
+        context.bot.send_message(chat_id=update.effective_chat.id, text='Вы добавили свой юзернейм в базу')
     except DatabaseError:
-        update.message.reply_text('проблема с саморегистрацией')
+        context.bot.send_message(chat_id=update.effective_chat.id, text='проблема с саморегистрацией')
 
 def self_unregistration(update,context):
     chat_id = str(update.effective_chat.id)
@@ -269,10 +270,11 @@ def self_unregistration(update,context):
         update_query = f"DELETE FROM chat WHERE user = '{username}' AND chat_id = {sql_chat_id}"
         cursor.execute(update_query)
         conn.commit()
-        update.message.reply_text('Вы удалили свой юзернейм из базы')
+        context.bot.send_message(chat_id=update.effective_chat.id, text='Вы удалили свой юзернейм из базы')
     except DatabaseError:
-        update.message.reply_text('проблема с автоудалением, возможно вы зпрегистрированны '
-                                  'через /add, тогда удаляйте через /del')
+        context.bot.send_message(chat_id=update.effective_chat.id, text='проблема с автоудалением, '
+                                                                        'возможно вы зпрегистрированны через '
+                                                                        '/add, тогда удаляйте через /del')
 
 
 def new(update, context):
@@ -282,6 +284,9 @@ def new(update, context):
     username = update.effective_user.username
     print(chat_id, username, firstname, lastname)
 
+def test(update, context):
+    text = 'some text'
+    context.bot.send_message(chat_id=update.effective_chat.id, text=text)
 
 def main():
     request = Request(
@@ -305,6 +310,7 @@ def main():
     dp.add_handler(CommandHandler('reg', self_registration))
     dp.add_handler(CommandHandler('unreg', self_unregistration))
     dp.add_handler(CommandHandler('faq', faq))
+    dp.add_handler(CommandHandler('test', test))
 
 
     logging.info('Бот Запустился' + datetime.utcnow().strftime("%d-%m-%Y %H:%M:%S"))
